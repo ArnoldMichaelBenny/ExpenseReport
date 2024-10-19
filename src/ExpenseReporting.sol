@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/access/Ownable.sol";
+import "@openzeppelin/access/AccessControl.sol";
+import "@openzeppelin/security/Pausable.sol";
 
 
 
-contract ExpenseReport is Ownable, AccessControl {
+contract ExpenseReport is Ownable, AccessControl, Pausable {
     
     // Define roles
     bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
     bytes32 public constant CONTRACTOR_ROLE = keccak256("CONTRACTOR_ROLE");
+   
 
    
     // Structure for a report
@@ -31,14 +32,12 @@ contract ExpenseReport is Ownable, AccessControl {
     mapping(uint => Report) public reports;
     mapping(address => bool) public registeredContractors; // Mapping to track registered contractors
     uint public reportCount;
-    address[] public auditors; // Array to hold auditor addresses
 
 
     // Events
     event ReportSubmitted(uint indexed reportId, address indexed contractor);
     event ReportApproved(uint indexed reportId, address indexed auditor);
     event ReportRejected(uint indexed reportId, string reason, address indexed rejectedBy);
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event AdminRoleTransferred(address indexed previousAdmin, address indexed newAdmin);
     event AuditorAdded(address indexed user);
     event AuditorRevoked(address indexed user);
@@ -46,9 +45,11 @@ contract ExpenseReport is Ownable, AccessControl {
 
    
     // Constructor
-    constructor() {
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender); // Grant the contract creator the default admin role
+    constructor() Ownable(msg.sender) {
+    _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
+
+
 
 
     // Function Modifiers
@@ -59,7 +60,7 @@ contract ExpenseReport is Ownable, AccessControl {
 
 
     // Function to transfer ownership
-    function transferOwnership(address newOwner) public onlyOwner {
+    function transferOwnership(address newOwner) public override onlyOwner {
     require(newOwner != address(0), "New owner is the zero address");
     require(newOwner != owner(), "New owner must be different from current owner");
     
@@ -108,13 +109,14 @@ contract ExpenseReport is Ownable, AccessControl {
 
      
     // Function to submit a report
-    function submitReport(uint256 projectId, string memory reportHash, string memory metadata) public onlyRole(CONTRACTOR_ROLE) {
+    function submitReport(string memory ipfsHash, uint256 projectId, string memory reportHash, string memory metadata) public onlyRole(CONTRACTOR_ROLE) {
+    require(registeredContractors[msg.sender], "Caller is not a registered contractor");
     require(projectId > 0, "Project ID must be greater than zero");
     require(bytes(reportHash).length > 0, "Report hash cannot be empty");
     require(bytes(metadata).length > 0, "Metadata cannot be empty");
 
     reportCount++;
-    reports[reportCount] = Report(reportHash, metadata, false, "", projectId); // Include projectId here
+    reports[reportCount] = Report(ipfsHash, reportHash, metadata, false, "", address(0), projectId); // Include projectId here
     emit ReportSubmitted(reportCount, msg.sender); // Log the submission with report ID
     }
 
@@ -123,14 +125,21 @@ contract ExpenseReport is Ownable, AccessControl {
    // Function to register a contractor
     function registerContractor(address user) public onlyRole(DEFAULT_ADMIN_ROLE) {
     require(!registeredContractors[user], "Contractor is already registered");
+    // Add to the mapping
     registeredContractors[user] = true;
-    }
+    // Grant the CONTRACTOR_ROLE to the user
+    grantRole(CONTRACTOR_ROLE, user);
+}
 
     // Function to deregister a contractor
     function deregisterContractor(address user) public onlyRole(DEFAULT_ADMIN_ROLE) {
     require(registeredContractors[user], "Contractor is not registered");
+    // Remove from the mapping
     registeredContractors[user] = false;
-    }
+    // Revoke the CONTRACTOR_ROLE from the user
+    revokeRole(CONTRACTOR_ROLE, user);
+}
+
 
     
     // Function to approve a report
@@ -142,27 +151,34 @@ contract ExpenseReport is Ownable, AccessControl {
     }
 
 
-   
-    // Function to reject a report
-    function rejectReport(uint reportId, string memory reason) public onlyAuditor {
+    // function to approve and reject report along with checks if it is already approved or rejected 
+    function approveReport(uint reportId) public onlyAuditor whenNotPaused {
     require(reportId > 0 && reportId <= reportCount, "Invalid report ID");
-    
-    // Update the report status and rejection reason
+    require(!reports[reportId].approved, "Report is already approved");
+    require(bytes(reports[reportId].rejectionReason).length == 0, "Report has been rejected");
+
+    reports[reportId].approved = true;
+    reports[reportId].auditedBy = msg.sender;  
+    emit ReportApproved(reportId, msg.sender);
+}
+
+function rejectReport(uint reportId, string memory reason) public onlyAuditor whenNotPaused {
+    require(reportId > 0 && reportId <= reportCount, "Invalid report ID");
+    require(!reports[reportId].approved, "Report is already approved");
+    require(bytes(reports[reportId].rejectionReason).length == 0, "Report has been rejected");
+
     reports[reportId].approved = false;
     reports[reportId].rejectionReason = reason;
-    
-    // Emit an event with the auditor's address
-    emit ReportRejected(reportId, reason, msg.sender); // Include who rejected the report
+    emit ReportRejected(reportId, reason, msg.sender);
 }
+
 
 
     
     // Function to add an auditor role
     function addAuditor(address user) public onlyRole(DEFAULT_ADMIN_ROLE) {
     require(!hasRole(AUDITOR_ROLE, user), "User is already an auditor");
-    
     grantRole(AUDITOR_ROLE, user);
-    auditors.push(user); // Add auditor to the array
     emit AuditorAdded(user);
     }
 
@@ -170,17 +186,7 @@ contract ExpenseReport is Ownable, AccessControl {
     // Function to revoke an auditor role
     function revokeAuditor(address user) public onlyRole(DEFAULT_ADMIN_ROLE) {
     require(hasRole(AUDITOR_ROLE, user), "User is not an auditor");
-
     revokeRole(AUDITOR_ROLE, user);
-    
-    // Remove auditor from the array
-    for (uint256 i = 0; i < auditors.length; i++) {
-        if (auditors[i] == user) {
-            auditors[i] = auditors[auditors.length - 1]; // Replace with last element
-            auditors.pop(); // Remove last element
-            break;
-        }
-    }
     emit AuditorRevoked(user);
     }
 
@@ -191,6 +197,22 @@ contract ExpenseReport is Ownable, AccessControl {
     Report memory report = reports[reportId];
     return (report.reportHash, report.metadata);
     }
+
+    function getReportHash(uint reportId) public view returns (string memory) {
+    return reports[reportId].ipfsHash; // get the ipfs Hash
+    }
+
+    // Function to check if a contractor is registered
+    function isRegisteredContractor(address user) public view returns (bool) {
+    return registeredContractors[user];
+    }
+
+    // Function to check if an address has auditor role
+    function isAuditor(address user) public view returns (bool) {
+    return hasRole(AUDITOR_ROLE, user);
+    }
+
+
 
 }
 
