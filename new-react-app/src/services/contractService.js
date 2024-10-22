@@ -55,18 +55,22 @@ export async function fetchReportDetails(reportId) {
     }
 
     try {
-        const report = await contract.getReport(reportId);
+        const [reportHash, metadata] = await contract.getExpenseDetails(reportId);
+        
         return {
-            projectId: report.projectId.toNumber(), // Convert BigNumber to regular number
-            ipfsHash: report.ipfsHash,
-            reportHash: report.reportHash,
-            metadata: report.metadata,
-            reporter: report.reporter,
+            projectId: reportId, // Assuming reportId is the same as projectId or adjust accordingly
+            ipfsHash: metadata, // Adjust this based on your contract logic
+            reportHash: reportHash,
+            metadata: metadata,
+            reporter: "Reported By User", // Add the reporter if available or relevant
         };
     } catch (error) {
         handleError('Error fetching report details', error);
     }
 }
+
+
+
 
 export async function fetchReportCount() {
     if (!contract) {
