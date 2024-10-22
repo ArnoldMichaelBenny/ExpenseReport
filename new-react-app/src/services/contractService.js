@@ -40,6 +40,7 @@ export async function submitReport(ipfsHash, projectId, reportHash, metadata) {
     }
 
     try {
+        // Treat the CID as the IPFS hash
         const transaction = await contract.submitReport(ipfsHash, projectId, reportHash, metadata);
         await transaction.wait(); // Wait for the transaction to be mined
         console.log('Report submitted successfully:', transaction);
@@ -49,25 +50,31 @@ export async function submitReport(ipfsHash, projectId, reportHash, metadata) {
     }
 }
 
+
 export async function fetchReportDetails(reportId) {
     if (!contract) {
         throw new Error('Contract is not initialized. Please connect your wallet.');
     }
 
     try {
+        // Retrieve the report details
         const [reportHash, metadata] = await contract.getExpenseDetails(reportId);
-        
+        const ipfsHash = await contract.getReportHash(reportId); // Ensure this is fetching the correct IPFS hash
+
         return {
-            projectId: reportId, // Assuming reportId is the same as projectId or adjust accordingly
-            ipfsHash: metadata, // Adjust this based on your contract logic
-            reportHash: reportHash,
+            projectId: reportId,
+            reportHash: reportHash, // Should reflect the unique report hash
             metadata: metadata,
-            reporter: "Reported By User", // Add the reporter if available or relevant
+            ipfsHash: ipfsHash // Fetch the actual IPFS Hash
         };
     } catch (error) {
         handleError('Error fetching report details', error);
     }
 }
+
+
+
+
 
 
 

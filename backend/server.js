@@ -64,15 +64,17 @@ app.post('/upload', async (req, res) => {
         };
 
         // Upload to Pinata using pinFileToIPFS
-        const result = await pinata.pinFileToIPFS(readableStream, pinataOptions);
-        
-        // Check if the result contains an IpfsHash
-        if (!result || !result.IpfsHash) {
-            throw new Error('Failed to pin file to IPFS');
-        }
+const result = await pinata.pinFileToIPFS(readableStream, pinataOptions);
 
-        // Return the result
-        res.status(200).json(result);
+// Check if the result contains an IpfsHash
+if (!result || !result.IpfsHash) {
+    throw new Error('Failed to pin file to IPFS');
+}
+
+// Return the result
+res.status(200).json({ IpfsHash: result.IpfsHash });
+
+
     } catch (error) {
         console.error('Error during file upload:', error);
         res.status(500).json({ error: error.message });

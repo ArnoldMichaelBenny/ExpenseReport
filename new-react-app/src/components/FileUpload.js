@@ -14,7 +14,6 @@ const FileUpload = () => {
     const [reportCount, setReportCount] = useState(0);
     const [contractInitialized, setContractInitialized] = useState(false);
 
-    // Initialize contract and load saved data
     useEffect(() => {
         const initialize = async () => {
             try {
@@ -61,23 +60,37 @@ const FileUpload = () => {
             toast.error('Please fill in all fields');
             return;
         }
-
+    
         if (!contractInitialized) {
             toast.error('Contract is not initialized. Please connect your wallet.');
             return;
         }
-
+    
         setLoading(true);
         try {
+            // Upload the file to IPFS and get the CID
             const ipfsHash = await uploadFileToIPFS(file, projectId, metadata);
-            const reportHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(ipfsHash + metadata));
+    
+            // Treat the CID as the report hash directly or calculate a new one
+            const reportHash = ipfsHash; // You can directly use the CID as the report hash
+    
+            // Submit the report with the CID and metadata
             await submitReport(ipfsHash, projectId, reportHash, metadata);
+    
+            // Fetch and update the report count
             const updatedReportCount = await fetchReportCount();
-
+    
             // Save report details and count to local storage
             localStorage.setItem('reportDetails', JSON.stringify({ ipfsHash, reportHash, metadata, projectId }));
             localStorage.setItem('reportCount', updatedReportCount);
             setReportCount(updatedReportCount);
+    
+            // Clear the input fields
+            setIpfsHash(''); // Clear the IPFS hash
+            setReportHash(''); // Clear the report hash
+            setProjectId(''); // Clear the project ID
+            setMetadata(''); // Clear the metadata
+    
             toast.success('Report submitted successfully!');
         } catch (error) {
             console.error('Error during submission:', error);
@@ -86,24 +99,31 @@ const FileUpload = () => {
             setLoading(false);
         }
     };
-
+    
     const uploadFileToIPFS = async (file, projectId, metadata) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('projectId', projectId);
         formData.append('metadata', metadata);
-
-        const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        if (response.data && response.data.IpfsHash) {
-            setIpfsHash(response.data.IpfsHash);
-            return response.data.IpfsHash;
-        } else {
-            throw new Error('Invalid response from server');
+    
+        try {
+            const response = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/upload`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+    
+            if (response.data && response.data.IpfsHash) {
+                setIpfsHash(response.data.IpfsHash);
+                return response.data.IpfsHash; // Ensure this returns the CID
+            } else {
+                throw new Error('Invalid response from server');
+            }
+        } catch (error) {
+            console.error('IPFS upload error:', error);
+            throw new Error('Error uploading file to IPFS.');
         }
     };
+    
+    
 
     return (
         <div>

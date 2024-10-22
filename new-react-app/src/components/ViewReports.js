@@ -17,7 +17,7 @@ const ViewReports = () => {
                 setReportCount(count);
 
                 if (count > 0) {
-                    const latestReport = await fetchReportDetails(count - 1);
+                    const latestReport = await fetchReportDetails(count - 1); // Get the latest report
                     setReport(latestReport);
                 }
             } catch (err) {
@@ -41,7 +41,11 @@ const ViewReports = () => {
         try {
             setError('');
             setLoading(true);
-            const fetchedReport = await fetchReportDetails(reportId);
+            // Adjust reportId for zero-indexed
+            const reportIndex = parseInt(reportId) - 1;
+            console.log('Fetching report for ID:', reportIndex); // Debug log
+            const fetchedReport = await fetchReportDetails(reportIndex);
+            console.log('Fetched report details:', fetchedReport); // Debug log
             setReport(fetchedReport);
         } catch (err) {
             setError('Error fetching report details. Please check the report ID.');
@@ -74,7 +78,16 @@ const ViewReports = () => {
             {report && (
                 <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '5px' }}>
                     <h3>Report Details:</h3>
-                    <p><strong>IPFS Hash:</strong> <a href={`https://ipfs.io/ipfs/${report.ipfsHash}`} target="_blank" rel="noopener noreferrer">{report.ipfsHash}</a></p>
+                    <p>
+                        <strong>IPFS Hash (CID):</strong>
+                        <a
+                            href={`https://teal-quick-toucan-590.mypinata.cloud/ipfs/${report.ipfsHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            {report.ipfsHash}
+                        </a>
+                    </p>
                     <p><strong>Report Hash:</strong> {report.reportHash}</p>
                     <p><strong>Metadata:</strong> {report.metadata}</p>
                     <p><strong>Project ID:</strong> {report.projectId}</p>
@@ -82,6 +95,7 @@ const ViewReports = () => {
                     <p><strong>Audited:</strong> {report.audited ? 'Yes' : 'No'}</p>
                 </div>
             )}
+
             {error && <p style={{ color: 'red' }}>{error}</p>}
             {!loading && report === null && !error && reportCount === 0 && (
                 <p style={{ textAlign: 'center' }}>No reports available.</p>
