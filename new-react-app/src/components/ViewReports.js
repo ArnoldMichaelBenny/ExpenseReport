@@ -1,107 +1,87 @@
 import React, { useState, useEffect } from 'react';
-import { fetchReportCount, fetchReportDetails } from '../services/contractService';
+import { fetchReportDetails, fetchReportCount } from '../services/contractService';
+import { toast } from 'react-toastify';
+import { ethers } from 'ethers'; // Import ethers to handle BigNumber
 
 const ViewReports = () => {
-    const [reportId, setReportId] = useState('');
-    const [report, setReport] = useState(null);
-    const [error, setError] = useState('');
+    const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(false);
     const [reportCount, setReportCount] = useState(0);
-    const [initialLoading, setInitialLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // Fetch the total number of reports and the latest report details when the component loads
     useEffect(() => {
-        const fetchInitialData = async () => {
+        const loadReports = async () => {
+            setLoading(true);
             try {
                 const count = await fetchReportCount();
                 setReportCount(count);
 
-                if (count > 0) {
-                    const latestReport = await fetchReportDetails(count - 1); // Get the latest report
-                    setReport(latestReport);
+                const fetchedReports = [];
+                for (let i = 1; i <= count; i++) { // Assuming report IDs start from 1
+                    const reportDetails = await fetchReportDetails(i);
+                    fetchedReports.push(reportDetails);
                 }
-            } catch (err) {
-                console.error('Error fetching initial data:', err);
-                setError('Could not retrieve report details. Please try again.');
+                setReports(fetchedReports);
+            } catch (error) {
+                console.error('Error fetching reports:', error);
+                toast.error('Failed to fetch reports. Please try again.');
             } finally {
-                setInitialLoading(false);
+                setLoading(false);
             }
         };
 
-        fetchInitialData();
+        loadReports();
     }, []);
 
-    const fetchReport = async () => {
-        if (!reportId || isNaN(reportId)) {
-            setError('Please enter a valid Report ID.');
-            setReport(null);
-            return;
+    const handleSearch = (e) => {
+        setSearchQuery(e.target.value);
+    };
+
+    const filteredReports = reports.filter(report => {
+        const { projectId, ipfsHash, metadata } = report;
+
+        // Check if the search query matches projectId or other details
+        return (
+            projectId.toString() === searchQuery ||  // Match exact project ID
+            ipfsHash.includes(searchQuery) ||       // Match IPFS hash
+            metadata.toLowerCase().includes(searchQuery.toLowerCase()) // Match metadata
+        );
+    });
+
+    const renderReports = () => {
+        if (filteredReports.length === 0) {
+            return <p>No reports found matching the search criteria.</p>; // Message when no reports match the search
         }
 
-        try {
-            setError('');
-            setLoading(true);
-            // Adjust reportId for zero-indexed
-            const reportIndex = parseInt(reportId) - 1;
-            console.log('Fetching report for ID:', reportIndex); // Debug log
-            const fetchedReport = await fetchReportDetails(reportIndex);
-            console.log('Fetched report details:', fetchedReport); // Debug log
-            setReport(fetchedReport);
-        } catch (err) {
-            setError('Error fetching report details. Please check the report ID.');
-            console.error(err);
-            setReport(null);
-        } finally {
-            setLoading(false);
-        }
+        return filteredReports.map((report, index) => (
+            <div key={index} style={{ border: '1px solid #ccc', margin: '10px', padding: '10px' }}>
+                <h3>Report {report.projectId.toString()}</h3> {/* Display report ID */}
+                <p>
+                    <strong>IPFS Hash:</strong> 
+                    <a href={`https://ipfs.io/ipfs/${report.ipfsHash}`} target="_blank" rel="noopener noreferrer">{report.ipfsHash}</a>
+                </p>
+                <p><strong>Project ID:</strong> {ethers.utils.formatUnits(report.projectId, 0)}</p> {/* Display Project ID */}
+                <p><strong>Metadata:</strong> {report.metadata}</p>
+                {/* Add other report details here */}
+            </div>
+        ));
     };
 
     return (
-        <div style={{ padding: '20px', maxWidth: '600px', margin: 'auto' }}>
-            <h2 style={{ textAlign: 'center' }}>View Report</h2>
-            {initialLoading ? (
-                <p style={{ textAlign: 'center' }}>Loading reports...</p>
-            ) : (
-                <p style={{ textAlign: 'center' }}>Total Reports Available: {reportCount}</p>
-            )}
+        <div>
+            <h2>View Reports</h2>
             <input
                 type="text"
-                value={reportId}
-                onChange={(e) => setReportId(e.target.value)}
-                placeholder="Enter Report ID"
-                style={{ width: '100%', padding: '10px', marginBottom: '10px' }}
+                placeholder="Search Reports by ID, IPFS Hash, or Metadata..."
+                value={searchQuery}
+                onChange={handleSearch}
+                style={{ marginBottom: '20px', padding: '10px', width: '100%' }}
             />
-            <button onClick={fetchReport} disabled={loading} style={{ width: '100%', padding: '10px' }}>
-                {loading ? 'Fetching...' : 'Fetch Report'}
-            </button>
-
-            {report && (
-                <div style={{ marginTop: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '5px' }}>
-                    <h3>Report Details:</h3>
-                    <p>
-                        <strong>IPFS Hash (CID):</strong>
-                        <a
-                            href={`https://teal-quick-toucan-590.mypinata.cloud/ipfs/${report.ipfsHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {report.ipfsHash}
-                        </a>
-                    </p>
-                    <p><strong>Report Hash:</strong> {report.reportHash}</p>
-                    <p><strong>Metadata:</strong> {report.metadata}</p>
-                    <p><strong>Project ID:</strong> {report.projectId}</p>
-                    <p><strong>Submitted By:</strong> {report.reporter}</p>
-                    <p><strong>Audited:</strong> {report.audited ? 'Yes' : 'No'}</p>
-                </div>
-            )}
-
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-            {!loading && report === null && !error && reportCount === 0 && (
-                <p style={{ textAlign: 'center' }}>No reports available.</p>
-            )}
-            {!loading && report === null && !error && (
-                <p style={{ textAlign: 'center' }}>Please enter a report ID to view the details.</p>
+            {loading ? <p>Loading reports...</p> : (
+                <>
+                    <p>Total Reports: {reportCount}</p>
+                    {renderReports()}
+                </>
             )}
         </div>
     );

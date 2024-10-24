@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import ExpenseReportABI from './ExpenseReportABI.json';
 
-const contractAddress = '0xD4Ba8166AEcd2a61f15d37d557908b52a1871145';
+const contractAddress = '0x2acc14f086803697f541e2525e56fd711aac1f48';
 let contract;
 let provider;
 let signer;
@@ -17,7 +17,7 @@ export const initializeContract = async () => {
     try {
         // Initialize the provider
         provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
+        await provider.send("eth_requestAccounts", []); // Request wallet accounts
         signer = provider.getSigner();
 
         // Log contract address for debugging
@@ -27,58 +27,50 @@ export const initializeContract = async () => {
         contract = new ethers.Contract(contractAddress, ExpenseReportABI, signer);
         console.log('Contract initialized successfully:', contract);
 
-        return true; // Success
+        return contract; // Return the contract instance
     } catch (error) {
-        console.error('Failed to initialize contract:', error);
-        return false; // Failure
+        handleError('Failed to initialize contract', error);
+        throw error; // Rethrow the error to be handled in the component
     }
 };
 
+
+// Function to submit a report
 export async function submitReport(ipfsHash, projectId, reportHash, metadata) {
     if (!contract) {
         throw new Error('Contract is not initialized. Please connect your wallet.');
     }
 
     try {
-        // Treat the CID as the IPFS hash
+        // Submit the report to the contract
         const transaction = await contract.submitReport(ipfsHash, projectId, reportHash, metadata);
         await transaction.wait(); // Wait for the transaction to be mined
         console.log('Report submitted successfully:', transaction);
-        return transaction;
+        return transaction; // Return transaction info
     } catch (error) {
         handleError('Error submitting report', error);
     }
 }
 
-
-export async function fetchReportDetails(reportId) {
-    if (!contract) {
-        throw new Error('Contract is not initialized. Please connect your wallet.');
-    }
-
+// Function to fetch report details
+export const fetchReportDetails = async (reportId) => {
     try {
-        // Retrieve the report details
-        const [reportHash, metadata] = await contract.getExpenseDetails(reportId);
-        const ipfsHash = await contract.getReportHash(reportId); // Ensure this is fetching the correct IPFS hash
+        // Ensure the contract is initialized
+        if (!contract) {
+            throw new Error('Contract is not initialized.');
+        }
 
-        return {
-            projectId: reportId,
-            reportHash: reportHash, // Should reflect the unique report hash
-            metadata: metadata,
-            ipfsHash: ipfsHash // Fetch the actual IPFS Hash
-        };
+        // Call the correct function to get report details
+        const report = await contract.getReportDetails(reportId);
+        return report; // Assuming report is returned as a struct
     } catch (error) {
         handleError('Error fetching report details', error);
+        throw error; // Rethrow the error for further handling
     }
-}
+};
 
 
-
-
-
-
-
-
+// Function to fetch the report count
 export async function fetchReportCount() {
     if (!contract) {
         throw new Error('Contract is not initialized. Please connect your wallet.');
